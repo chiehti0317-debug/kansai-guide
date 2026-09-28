@@ -1,0 +1,43 @@
+name: Import encrypted travel website
+on:
+  push:
+    branches: [main]
+    paths: ['_migration/source.json']
+permissions:
+  contents: write
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@v4
+      - name: Import verified static website files
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, io, json, pathlib, urllib.request, zipfile
+          source = json.loads(pathlib.Path('_migration/source.json').read_text())
+          request = urllib.request.Request(source['url'], headers={'User-Agent': 'kansai-guide-migration'})
+          with urllib.request.urlopen(request, timeout=60) as response:
+              payload = response.read(2000000)
+          if hashlib.sha256(payload).hexdigest() != source['sha256']:
+              raise SystemExit('Archive integrity verification failed')
+          allowed = {'index.html', 'app.js', 'guide.enc.json', 'sw.js', 'manifest.webmanifest', 'icon-512.png', 'robots.txt', '.nojekyll'}
+          with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+              if set(archive.namelist()) != allowed:
+                  raise SystemExit('Unexpected file in deployment package')
+              for entry in archive.infolist():
+                  if entry.file_size > 1000000:
+                      raise SystemExit('Oversized file')
+                  target = pathlib.Path(entry.filename)
+                  if target.exists():
+                      raise SystemExit('Refusing to overwrite an existing website file')
+                  target.write_bytes(archive.read(entry))
+          print('Verified and imported eight static files; no private unlock code is included.')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html app.js guide.enc.json sw.js manifest.webmanifest icon-512.png robots.txt .nojekyll
+          git commit -m 'Import encrypted mobile travel guide; keep all assets on GitHub'
+          git push origin HEAD:main
