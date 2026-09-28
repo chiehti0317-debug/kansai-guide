@@ -1,0 +1,42 @@
+name: Complete booklet font choice catalog
+on:
+  push:
+    branches: [booklet-assets-20260928]
+    paths: ['.github/workflows/booklet-font-catalog-complete.yml']
+permissions:
+  contents: read
+jobs:
+  proofs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install renderer
+        run: python3 -m pip install --quiet weasyprint fonttools brotli pymupdf pillow pyyaml
+      - name: Complete documented font proofs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import pathlib, yaml, subprocess, sys
+          config=yaml.safe_load(pathlib.Path('.github/workflows/booklet-font-catalog.yml').read_text())
+          step=next(x for x in config['jobs']['proofs']['steps'] if x.get('name')=='Render official open fonts without distributing font files')
+          script=step['run'].split("cat > /tmp/make_catalog.py <<'PY'\n",1)[1].rsplit('\nPY\n',1)[0]
+          script=script.replace("own('C05','源樣黑體','ButTaiwan/genyo-font','genyo.*gothic','繁中','穩定黑體','H2 H3 B1 D1 D2 D3 C1 C2','偏易讀的黑體；以實際檔案字形版本為準。')", "own('C05','思源黑體 Source Han Sans TC','adobe-fonts/source-han-sans','SourceHanSansTC-Regular','繁中','穩定黑體','H2 H3 B1 D1 D2 D3 C1 C2','與Noto Sans TC同源，列作官方版本選項。')")
+          script=script.replace("value=0\n", "value=0\n    if re.search(r'[-_]R[.]',path,re.I): value+=160\n    if re.search(r'[-_]L[.]',path,re.I): value-=80\n")
+          script=script.replace("if not licenses: raise ValueError('No license file found')", "if not licenses and repo=='jasonhandwriting/JasonHandwriting': licenses=['README.md']\n        if not licenses: raise ValueError('No license file found')")
+          script=script.replace("records=[]; failures=[]\n", "records=[]; failures=[]\nspecs=[s for s in specs if s['id'] in ['C01','C04','C05','C06','C07','C08','C09','C19','C20','C21','C22','C23','C24','C25','C26','C27']]\n")
+          script=script.replace("cut=('wght '+str(weight) if s['variable'] else s['font_cut'])", "cut=('wght '+str(weight) if s['variable'] else pathlib.Path(s['font_path']).stem)")
+          script=script.replace("'　｜　SIL OFL 1.1'", "'　｜　SIL OFL'")
+          script=script.replace("spec.update(file=str(target)", "spec.update(file=str(target)")
+          script=script.replace("font.close(); records.append(spec)", "\n        if repo=='jasonhandwriting/JasonHandwriting':\n            spec['license']='SIL OFL（作者README聲明）'\n        font.close(); records.append(spec)")
+          pathlib.Path('/tmp/complete_catalog.py').write_text(script)
+          subprocess.run([sys.executable,'/tmp/complete_catalog.py'],check=True)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: booklet-font-catalog-completed
+          path: font-catalog-proofs/
+          retention-days: 1
+          compression-level: 6
