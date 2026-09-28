@@ -1,0 +1,178 @@
+name: Booklet open font choice catalog
+on:
+  push:
+    branches: [booklet-assets-20260928]
+    paths: ['.github/workflows/booklet-font-catalog.yml']
+permissions:
+  contents: read
+jobs:
+  proofs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Install proof renderer
+        run: |
+          python3 -m pip install --quiet weasyprint fonttools brotli pymupdf pillow
+      - name: Render official open fonts without distributing font files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > /tmp/make_catalog.py <<'PY'
+          import os, re, io, json, html, hashlib, pathlib, urllib.request, urllib.parse, time, traceback
+          from fontTools.ttLib import TTFont
+          from weasyprint import HTML
+          from weasyprint.text.fonts import FontConfiguration
+          import fitz
+          root=pathlib.Path('/tmp/booklet-font-render'); root.mkdir(exist_ok=True)
+          output=pathlib.Path('font-catalog-proofs'); output.mkdir(exist_ok=True)
+          (output/'cards').mkdir(exist_ok=True)
+          cache={}
+          token=os.environ.get('GH_TOKEN','')
+          def get(url, binary=False):
+              headers={'User-Agent':'BookletFontCatalog/1.0','Accept':'application/vnd.github+json' if 'api.github.com' in url else '*/*'}
+              if 'api.github.com' in url and token: headers['Authorization']='Bearer '+token
+              for attempt in range(3):
+                  try:
+                      with urllib.request.urlopen(urllib.request.Request(url,headers=headers),timeout=90) as r: data=r.read()
+                      return data if binary else json.loads(data)
+                  except Exception:
+                      if attempt==2: raise
+                      time.sleep(2+attempt*3)
+          def repo_tree(repo):
+              if repo not in cache:
+                  result=get('https://api.github.com/repos/'+repo+'/git/trees/HEAD?recursive=1')
+                  cache[repo]=(result['sha'],[x['path'] for x in result['tree'] if x['type']=='blob'])
+              return cache[repo]
+          specs=[]
+          def gf(i,name,slug,group,style,roles,note):
+              specs.append(dict(id=i,name=name,repo='google/fonts',slug=slug,group=group,style=style,roles=roles,note=note))
+          def own(i,name,repo,pattern,group,style,roles,note):
+              specs.append(dict(id=i,name=name,repo=repo,pattern=pattern,group=group,style=style,roles=roles,note=note))
+          gf('C01','Noto Sans TC','notosanstc','繁中','清楚黑體','H2 H3 B1 D1 D2 D3 C1 C2','資訊與正文候選；可用不同字重統一整本。')
+          gf('C02','Noto Serif TC','notoseriftc','繁中','典雅明體','H1 H2 H3 B1 B2 C1','偏書籍與刊物；小字先試印細筆畫。')
+          gf('C03','粉圓 Huninn','huninn','繁中','親切圓體','H2 H3 B1 B2 D3','台灣繁中字形；旅行手帳的圓潤選項。')
+          own('C04','源泉圓體','ButTaiwan/gensen-font','gensen','繁中','柔和圓體','H2 H3 B1 B2 D3','選TW字形；和粉圓分開比較筆畫形狀。')
+          own('C05','源樣黑體','ButTaiwan/genyo-font','genyo.*gothic','繁中','穩定黑體','H2 H3 B1 D1 D2 D3 C1 C2','偏易讀的黑體；以實際檔案字形版本為準。')
+          own('C06','源石黑體','ButTaiwan/genseki-font','genseki','繁中','復古黑體','H1 H2 H3 B1','與中性黑體並排比較復古筆形。')
+          own('C07','源樣明體','ButTaiwan/genyo-font','genyo.*(min|serif)','繁中','印刷明體','H1 H2 H3 B1 B2','適合刊物；不要與同系列黑體混淆。')
+          own('C08','源流明體','ButTaiwan/genryu-font','genryu','繁中','古典明體','H1 H2 H3 B1 B2','適合京都文化段；長文需做10.5pt試印。')
+          own('C09','源雲明體','ButTaiwan/genwan-font','genwan','繁中','溫暖明體','H1 H2 H3 B1 B2','墨韻與柔和交接；比較實際印刷濃淡。')
+          gf('C10','昭源黑體 Chiron Hei HK','chironheihk','繁中','現代黑體','H2 H3 B1 D1 D2 D3 C1 C2','繁中字形選擇不等同台灣教育字形；自行比較。')
+          gf('C11','昭源宋體 Chiron Sung HK','chironsunghk','繁中','現代宋體','H1 H2 H3 B1 B2','比較與Noto Serif TC的筆形；不是簡體版本。')
+          gf('C12','昭源環方 Chiron GoRound TC','chirongoroundtc','繁中','方圓黑體','H2 H3 B1 D2 D3','保留黑體結構並帶圓潤感。')
+          own('C13','饅頭黑體 Mantou Sans','mant0u0/MantouSans','mantou','繁中','厚重海報字','H1 H2','標題專用優先；不建議長文或小字。')
+          own('C14','俐方體11號 Cubic 11','ACh-K/Cubic-11','cubic','繁中','像素字','H1 H2 L1','裝飾標題候選；點陣造型不代表圖片低解析。')
+          gf('C15','芫荽 Iansui','iansui','繁中','硬筆手寫','H2 H3 B1 B2','台灣繁中取向；長文與小字仍以實印選擇。')
+          gf('C16','霞鶩文楷 TC','lxgwwenkaitc','繁中','文楷手寫','H2 H3 B1 B2','使用TC版本；不要以SC版本冒充繁中。')
+          own('C17','辰宇落雁體','Chenyu-otf/chenyuluoyan_thin','.*','繁中','輕柔手寫','H1 H2 B2','細筆畫適合短句；不作集合地址的唯一字體。')
+          own('C18','內海字體 Naikai','max32002/naikaifont','naikai','繁中','自然手寫','H2 H3 B1 B2','瀨戶字體繁中補字版本；選定後逐字檢查。')
+          styles=['圓潤','秀氣','呆萌','POP','行楷','Q萌','飄逸','隨性','文青']
+          for n,st in enumerate(styles,1):
+              own('C'+str(18+n).zfill(2),'清松手寫體'+str(n),'jasonhandwriting/JasonHandwriting',r'jasonhandwriting[_ -]?'+str(n)+r'(?:[^0-9]|$)','繁中','手寫・'+st,'H2 H3 B2' if n in (4,5,7,8) else 'H2 H3 B1 B2','官方原版；這是同系列不同款式，不是九種字重。')
+          own('C28','獅尾黑體 Swei Sans','max32002/swei-sans','sweisans','繁中','簡明黑體','H2 H3 B1 D2 D3','優先TC字形；正式排版仍檢查人名與地名。')
+          own('C29','獅尾四季春','max32002/swei-spring','sweispring','繁中','明體衍生','H1 H2 H3 B1 B2','與源流、源雲並排看筆畫風格。')
+          own('C30','獅尾詠春黑體','max32002/swei-fist-sans','sweifist','繁中','個性黑體','H1 H2 H3','適合章節大標；裝飾性強，長文謹慎。')
+          japanese=[('Noto Sans JP','notosansjp','清楚日文黑體'),('Noto Serif JP','notoserifjp','日文明體'),('Zen Maru Gothic','zenmarugothic','日文圓體'),('Zen Old Mincho','zenoldmincho','日文古典明體'),('Kaisei Decol','kaiseidecol','裝飾日文明體'),('Klee One','kleeone','日文硬筆手寫'),('Yusei Magic','yuseimagic','日文手寫黑體'),('Dela Gothic One','delagothicone','厚重日文海報字')]
+          for n,(name,slug,st) in enumerate(japanese,1): gf('J'+str(n).zfill(2),name,slug,'日文',st,'L2','供日文店名與假名使用；不可推定完整支援繁中。')
+          english=[('DM Serif Display','dmserifdisplay','典雅標題襯線','L1'),('Playfair Display','playfairdisplay','高對比刊物襯線','L1'),('Cormorant Garamond','cormorantgaramond','纖細古典襯線','L1'),('Libre Baskerville','librebaskerville','書籍襯線','L1 C2'),('Fraunces','fraunces','柔軟復古襯線','L1'),('Montserrat','montserrat','幾何無襯線','D1 L1 C2'),('Oswald','oswald','窄身標題','D1 L1 C2'),('Barlow Condensed','barlowcondensed','窄身資訊字','D1 L1 C2'),('IBM Plex Mono','ibmplexmono','等寬數字','D1 L1 C2'),('Caveat','caveat','英文手寫','B2 L1')]
+          for n,(name,slug,st,rs) in enumerate(english,1): gf('E'+str(n).zfill(2),name,slug,'英文數字',st,rs,'只用於英文與數字；中文字需另配繁中字體。')
+          def score(path, spec):
+              low=path.lower(); stem=pathlib.Path(path).stem.lower()
+              value=0
+              if 'regular' in low: value+=120
+              if 'wght' in low or 'variable' in low: value+=100
+              if low.endswith('.ttf'): value+=15
+              if low.endswith('.otf'): value+=10
+              if spec['group']=='繁中':
+                  if re.search(r'tw|taiwan',low): value+=55
+                  elif re.search(r'tc|traditional',low): value+=40
+                  if re.search(r'(^|[/_-])(jp|sc|kr|hk)[/_-]',low) and spec['id'] not in ['C10','C11']: value-=45
+              if re.search(r'bold|heavy|black',low): value-=25
+              if re.search(r'light|thin',low) and spec['id']!='C17': value-=60
+              if re.search(r'italic|mono|slant|oblique|subset|backup|old|\bbak\b',low): value-=80
+              if re.search(r'2\.0|2\.1',low): value+=10
+              return value-len(path)*.001
+          records=[]; failures=[]
+          for spec in specs:
+              try:
+                  if 'slug' in spec:
+                      repo=spec['repo']; directory='ofl/'+spec['slug']
+                      listing=get('https://api.github.com/repos/'+repo+'/contents/'+directory)
+                      paths=[x['path'] for x in listing if x['type']=='file']; ref='main'
+                      spec['source']='https://github.com/google/fonts/tree/main/'+directory
+                      licenses=[p for p in paths if pathlib.Path(p).name.lower()=='ofl.txt']
+                  else:
+                      repo=spec['repo']; ref,paths=repo_tree(repo)
+                      spec['source']='https://github.com/'+repo
+                      licenses=[p for p in paths if re.search(r'(^|/)(ofl|license|sil_open_font_license)',p,re.I) and re.search(r'\.(txt|md)$',p,re.I)]
+                      if not licenses: licenses=[p for p in paths if pathlib.Path(p).name.lower() in ['license','copying']]
+                  fonts=[p for p in paths if p.lower().endswith(('.ttf','.otf')) and ('pattern' not in spec or re.search(spec['pattern'],p,re.I))]
+                  if not fonts: raise ValueError('No matching downloadable font. Paths: '+', '.join(paths[:10]))
+                  chosen=sorted(fonts,key=lambda p:score(p,spec),reverse=True)[0]
+                  if not licenses: raise ValueError('No license file found')
+                  licpath=sorted(licenses,key=lambda p:('ofl' not in p.lower(),len(p)))[0]
+                  licurl='https://raw.githubusercontent.com/'+repo+'/'+ref+'/'+urllib.parse.quote(licpath)
+                  licbytes=get(licurl,True); lictxt=licbytes.decode('utf-8',errors='replace')
+                  if not re.search(r'(SIL\s+OPEN\s+FONT\s+LICENSE|Open Font License)',lictxt,re.I): raise ValueError('OFL license not verified')
+                  fonturl='https://raw.githubusercontent.com/'+repo+'/'+ref+'/'+urllib.parse.quote(chosen)
+                  data=get(fonturl,True)
+                  target=root/(spec['id']+pathlib.Path(chosen).suffix); target.write_bytes(data)
+                  font=TTFont(target,lazy=False); cmap=font.getBestCmap() or {}
+                  def nam(n):
+                      for x in font['name'].names:
+                          if x.nameID==n:
+                              try:return x.toUnicode()
+                              except:pass
+                      return ''
+                  check='宇治京都大阪天橋立伊根中村藤吉本店平等院鳳翔館伏見稻荷大社日本橋近鐵梅田箕面萱野糺之森京都駅前店なんばあべのハルカス08:10¥1,200'
+                  missing=''.join(dict.fromkeys(c for c in check if not c.isspace() and ord(c) not in cmap))
+                  spec.update(file=str(target),font_path=chosen,font_url=fonturl,license='SIL OFL 1.1',license_url=licurl,license_sha256=hashlib.sha256(licbytes).hexdigest(),sha256=hashlib.sha256(data).hexdigest(),font_family=nam(1),font_cut=nam(2),font_version=nam(5),missing_test=missing,cmap_set=set(cmap),variable='fvar' in font,available_files=len(fonts))
+                  if 'fvar' in font:
+                      spec['axes']={a.axisTag:[a.minValue,a.defaultValue,a.maxValue] for a in font['fvar'].axes}
+                  else: spec['axes']={}
+                  font.close(); records.append(spec)
+                  print('READY',spec['id'],spec['name'],chosen,'missing-test:',missing,flush=True)
+              except Exception as e:
+                  spec['error']=str(e); failures.append(spec); print('UNAVAILABLE',spec['id'],str(e),flush=True)
+          ui=next(x for x in records if x['id']=='C01')
+          def esc(s): return html.escape(str(s))
+          for idx,s in enumerate(records):
+              fontconf=FontConfiguration()
+              def text(t):
+                  return ''.join(esc(c) if ord(c) in s['cmap_set'] or c.isspace() else '<span class="missing">□</span>' for c in t)
+              if s['group']=='繁中':
+                  samples=[('24 pt','宇治・京都・大阪',24),('13 pt','中村藤吉本店／日本橋集合',13),('10.5 pt','早午餐與抹茶，時段含候位；\n不要把10:00當成保證入座。',10.5),('16 pt','08:10   08:25–08:40   ¥1,200',16),('8.5 pt','圖說：天橋立與伊根舟屋，照片裁切說明。',8.5)]
+              elif s['group']=='日文':
+                  samples=[('24 pt','京都・大阪・宇治',24),('13 pt','京都駅前店 ／ なんば',13),('10.5 pt','あべのハルカス・日本橋２番出口\n中村藤吉本店・天橋立・伊根',10.5),('16 pt','08:10   08:25–08:40   ¥1,200',16),('8.5 pt','KYOTO / OSAKA / UJI / AMANOHASHIDATE',8.5)]
+              else:
+                  samples=[('24 pt','Kansai Field Notes',24),('13 pt','KYOTO / OSAKA / UJI',13),('10.5 pt','A day by the sea. Walk, pause, explore.\nKANSAI TRAVEL JOURNAL / 2026',10.5),('16 pt','08:10   08:25–08:40   ¥1,200',16),('8.5 pt','0123456789  1 I l  0 O  /  #  +  -  :',8.5)]
+              weight=400
+              if s['axes'].get('wght'): weight=max(s['axes']['wght'][0],min(400,s['axes']['wght'][2]))
+              body=''.join('<div class="sample"><span class="size">'+label+'</span><div class="specimen" style="font-size:'+str(size)+'pt">'+text(t).replace('\n','<br>')+'</div></div>' for label,t,size in samples)
+              cut=('wght '+str(weight) if s['variable'] else s['font_cut'])
+              doc='''<!doctype html><html lang="zh-TW"><meta charset="utf-8"><style>
+              @font-face{font-family:UI;src:url("'''+pathlib.Path(ui['file']).as_uri()+'''");font-weight:100 900}
+              @font-face{font-family:Proof;src:url("'''+pathlib.Path(s['file']).as_uri()+'''");font-weight:'''+('100 900' if s['variable'] else '400')+'''}
+              @page{size:148mm 98mm;margin:7mm 9mm}*{box-sizing:border-box}body{margin:0;font-family:UI,sans-serif;color:#233a36;font-size:8pt;line-height:1.4}.top{display:flex;align-items:baseline;gap:7px;border-bottom:.6pt solid #aebbb5;padding-bottom:4mm}.code{font-size:11pt;font-weight:700;color:#1d4563}.name{font-size:12pt;font-weight:600}.style{font-size:8pt;color:#687c70;margin-top:1mm}.sample{display:flex;gap:2mm;align-items:baseline;margin-top:2.2mm}.size{width:13mm;flex-shrink:0;color:#657b70;font-size:7pt}.specimen{font-family:Proof;font-weight:'''+str(weight)+''';font-stretch:normal;letter-spacing:0;line-height:1.45;white-space:normal}.missing{font-family:UI;color:#c43f28}.bottom{margin-top:2.5mm;border-top:.4pt solid #d4dad6;padding-top:2mm;color:#5a6c61;font-size:7.3pt;line-height:1.5}a{color:#1d4563;text-decoration:none}
+              </style><div class="top"><span class="code">'''+s['id']+'''</span><span class="name">'''+esc(s['name'])+'''</span></div><div class="style">'''+esc(s['style']+'　｜　'+cut+'　｜　'+s['group'])+'''</div>'''+body+'''<div class="bottom">'''+esc('建議用途 '+s['roles']+'　｜　SIL OFL 1.1')+'''<br><a href="'''+s['source']+'''">官方字型專案 ↗</a>　'''+esc(s['note'])+'''</div></html>'''
+              pdf=output/'cards'/(s['id']+'.pdf'); HTML(string=doc,base_url=str(root)).write_pdf(str(pdf),font_config=fontconf)
+              document=fitz.open(pdf)
+              if len(document)!=1: print('OVERFLOW',s['id'],len(document),flush=True)
+              page=document[0]; page.get_pixmap(matrix=fitz.Matrix(2.2,2.2),alpha=False).save(str(output/'cards'/(s['id']+'.png')))
+              s['render_pages']=len(document); s['sample_cut']=cut
+              document.close()
+          serial=[{k:v for k,v in r.items() if k not in ['cmap_set','file']} for r in records]
+          (output/'catalog.json').write_text(json.dumps({'checked':'2026-09-29','fonts':serial,'unavailable':failures},ensure_ascii=False,indent=2))
+          forbidden=list(output.rglob('*.ttf'))+list(output.rglob('*.otf'))+list(output.rglob('*.woff*'))
+          assert not forbidden,'Do not distribute font files'
+          print('DONE',len(records),'rendered;',len(failures),'unavailable',flush=True)
+          PY
+          python3 /tmp/make_catalog.py
+      - name: Return rendered documents only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: booklet-font-catalog-proofs
+          path: font-catalog-proofs/
+          retention-days: 1
+          compression-level: 6
