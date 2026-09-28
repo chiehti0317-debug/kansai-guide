@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Fetch original CC photographs
+      - name: Fetch print-suitable CC photographs
         run: |
           python3 - <<'PY'
           import pathlib, hashlib, urllib.parse, urllib.request, json, time
@@ -22,30 +22,29 @@ jobs:
             ('daruma','Katsuo-ji daruma.jpg','Chris Gladis','CC BY 2.0'),
             ('namba','Namba Yasaka-Jinja.png','Thomas Housieaux','CC BY 4.0'),
             ('amano','Amanohashidate view from Mt Moju02s3s4592.jpg','663highland','CC BY 2.5'),
-            ('ine','Funaya in Ine Town, Yosa District, Kyoto Prefecture 006.jpg','Naokijp','CC BY-SA 4.0'),
-            ('uji','Uji river, Kyoto.jpg','Motokoka','CC BY-SA 4.0')
+            ('ine','Funaya in Ine Town, Yosa District, Kyoto Prefecture 006.jpg','Naokijp','CC BY-SA 4.0')
           ]
           records=[]
           for key,name,author,lic in items:
             filename=name.replace(' ','_'); h=hashlib.md5(filename.encode()).hexdigest()
-            url='https://upload.wikimedia.org/wikipedia/commons/'+h[0]+'/'+h[:2]+'/'+urllib.parse.quote(filename)
+            suffix=h[0]+'/'+h[:2]+'/'+urllib.parse.quote(filename)
+            original='https://upload.wikimedia.org/wikipedia/commons/'+suffix
+            url=original if key=='daruma' else 'https://upload.wikimedia.org/wikipedia/commons/thumb/'+suffix+'/2560px-'+urllib.parse.quote(filename)
             source='https://commons.wikimedia.org/wiki/File:'+urllib.parse.quote(filename)
-            for attempt in range(3):
-              try:
-                req=urllib.request.Request(url,headers={'User-Agent':'KansaiBookletAssetResearch/1.0 (personal print booklet; Wikimedia attribution preserved)'})
-                with urllib.request.urlopen(req,timeout=60) as r: data=r.read(30000000)
-                if not (data.startswith(b'\xff\xd8') or data.startswith(b'\x89PNG')): raise ValueError('Not an image')
-                break
-              except Exception as e:
-                if attempt==2: raise
-                time.sleep(5*(attempt+1))
-            target=key+pathlib.Path(name).suffix.lower(); (out/target).write_bytes(data)
-            records.append({'id':key,'file':target,'title':name,'author':author,'license':lic,'source':source,'original_url':url,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()})
-            print(key,len(data),lic)
-            time.sleep(2)
-          (out/'sources.json').write_text(json.dumps(records,ensure_ascii=False,indent=2))
+            try:
+              req=urllib.request.Request(url,headers={'User-Agent':'KansaiBookletAssetResearch/1.0 (personal print booklet; Wikimedia attribution preserved)'})
+              with urllib.request.urlopen(req,timeout=60) as r: data=r.read(30000000)
+              if not (data.startswith(b'\xff\xd8') or data.startswith(b'\x89PNG')): raise ValueError('Not an image')
+              target=key+pathlib.Path(name).suffix.lower(); (out/target).write_bytes(data)
+              records.append({'id':key,'file':target,'title':name,'author':author,'license':lic,'source':source,'original_url':original,'download_url':url,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()})
+              print(key,len(data),lic,flush=True)
+            except Exception as e:
+              print(key,'unavailable',str(e),flush=True)
+            (out/'sources.json').write_text(json.dumps(records,ensure_ascii=False,indent=2))
+            time.sleep(8)
           PY
       - name: Return research assets, not website content
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: licensed-booklet-photographs
