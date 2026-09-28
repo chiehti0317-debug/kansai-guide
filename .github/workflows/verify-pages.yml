@@ -1,0 +1,102 @@
+name: Verify private guide on GitHub Pages
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/verify-pages.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check out website
+        uses: actions/checkout@v4
+      - name: Verify published files match this repository
+        run: |
+          python3 - <<'PY'
+          import hashlib, pathlib, time, urllib.request
+          base='https://chiehti0317-debug.github.io/kansai-guide/'
+          files=['index.html','app.js','guide.enc.json','sw.js','manifest.webmanifest','icon-512.png','robots.txt']
+          for attempt in range(18):
+              try:
+                  with urllib.request.urlopen(base+'index.html?verify='+str(time.time_ns()),timeout=15) as r:
+                      actual=r.read()
+                  if actual==pathlib.Path('index.html').read_bytes(): break
+              except Exception: pass
+              time.sleep(10)
+          else: raise SystemExit('The expected site is not yet available')
+          for name in files:
+              with urllib.request.urlopen(base+name+'?verify='+str(time.time_ns()),timeout=20) as r:
+                  payload=r.read()
+                  assert r.status==200
+              assert hashlib.sha256(payload).digest()==hashlib.sha256(pathlib.Path(name).read_bytes()).digest(),name
+              print(name+': HTTP 200, integrity verified')
+          print('Published URL: '+base)
+          PY
+      - name: Install browser test tools
+        run: |
+          python3 -m pip install --quiet playwright
+          python3 -m playwright install --with-deps chromium > /tmp/browser-install.log 2>&1
+      - name: Test the mobile encrypted shell and offline reopen
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, secrets
+          from playwright.sync_api import sync_playwright
+          base='https://chiehti0317-debug.github.io/kansai-guide/'
+          test_code=secrets.token_urlsafe(32)
+          # No real unlock code or decrypted itinerary is supplied to CI.
+          # This encrypted fixture exists only inside this test browser.
+          with sync_playwright() as p:
+              browser=p.chromium.launch()
+              context=browser.new_context(viewport={'width':390,'height':844},is_mobile=True,has_touch=True)
+              page=context.new_page()
+              errors=[]
+              page.on('pageerror',lambda e:errors.append(str(e)))
+              page.goto(base,wait_until='networkidle')
+              assert page.locator('#gate').is_visible()
+              assert not page.locator('#reader').is_visible()
+              assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+              fixture=page.evaluate('''async (password)=>{
+                const enc=new TextEncoder(), salt=crypto.getRandomValues(new Uint8Array(16)), iv=crypto.getRandomValues(new Uint8Array(12));
+                const material=await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveKey']);
+                const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:600000,hash:'SHA-256'},material,{name:'AES-GCM',length:256},false,['encrypt']);
+                const format='kansai-static-guide-v1';
+                const html='<!doctype html><html><body><h1 id="offline-probe">Encrypted browser test</h1></body></html>';
+                const result=await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:enc.encode(format)},key,enc.encode(html));
+                const b64=x=>btoa(String.fromCharCode(...new Uint8Array(x)));
+                return {format,kdf:'PBKDF2-SHA256',iterations:600000,salt:b64(salt),iv:b64(iv),ciphertext:b64(result)};
+              }''',test_code)
+              page.route('**/guide.enc.json',lambda route:route.fulfill(json=fixture))
+              page.locator('#passphrase').fill('wrong-code-for-test')
+              page.locator('#unlock').click()
+              page.wait_for_function('!document.querySelector("#unlock").disabled')
+              assert page.locator('#error').inner_text()
+              assert not page.locator('#reader').is_visible()
+              page.locator('#passphrase').fill(test_code)
+              page.locator('#unlock').click()
+              page.frame_locator('#guide').locator('#offline-probe').wait_for()
+              assert page.locator('#passphrase').input_value()==''
+              page.unroute('**/guide.enc.json')
+              page.locator('#offline').click()
+              page.wait_for_function('!document.querySelector("#offline").disabled',timeout=30000)
+              assert '已備妥' in page.locator('#offline').inner_text()
+              # Replace only this test browser's cached ciphertext, never server data.
+              page.evaluate('''async (fixture)=>{
+                const cache=await caches.open('kansai-gh-20260928-v1');
+                await cache.put(new URL('./guide.enc.json',location.href).href,new Response(JSON.stringify(fixture),{headers:{'Content-Type':'application/json'}}));
+              }''',fixture)
+              context.set_offline(True)
+              page.reload(wait_until='domcontentloaded')
+              page.locator('#passphrase').fill(test_code)
+              page.locator('#unlock').click()
+              page.frame_locator('#guide').locator('#offline-probe').wait_for()
+              page.locator('#lock').click()
+              assert page.locator('#gate').is_visible()
+              assert not page.locator('#reader').is_visible()
+              assert not errors,errors
+              browser.close()
+          print('PASS: mobile layout, incorrect code rejection, Web Crypto decrypt, CSP iframe, lock, service worker preparation, offline reopen and decrypt.')
+          print('The shell test uses generated fixture data, not the private itinerary. Actual iPhone testing remains a traveler step.')
+          PY
