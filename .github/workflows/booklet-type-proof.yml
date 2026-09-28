@@ -1,0 +1,59 @@
+name: Booklet typography print proof
+on:
+  push:
+    branches: [booklet-assets-20260928]
+    paths: ['.github/workflows/booklet-type-proof.yml']
+permissions:
+  contents: read
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Install print renderer
+        run: python3 -m pip install --quiet weasyprint fonttools brotli
+      - name: Make a generic A5 font proof (no private trip data)
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import urllib.request, json, hashlib
+          from weasyprint import HTML
+          from fontTools.ttLib import TTFont
+          from fontTools.varLib.instancer import instantiateVariableFont
+          work=Path('work');work.mkdir();out=Path('proof');out.mkdir()
+          resources={
+           'MantouSans-Regular.ttf':'https://raw.githubusercontent.com/mant0u0/MantouSans/main/Font/MantouSans-Regular.ttf',
+           'Iansui-Regular.ttf':'https://raw.githubusercontent.com/ButTaiwan/iansui/main/fonts/ttf/Iansui-Regular.ttf',
+           'NotoSansTC-VF.ttf':'https://raw.githubusercontent.com/google/fonts/main/ofl/notosanstc/NotoSansTC%5Bwght%5D.ttf',
+           'OFL-Mantou.txt':'https://raw.githubusercontent.com/mant0u0/MantouSans/main/OFL.txt',
+           'OFL-Iansui.txt':'https://raw.githubusercontent.com/ButTaiwan/iansui/main/OFL.txt',
+           'OFL-NotoSansTC.txt':'https://raw.githubusercontent.com/google/fonts/main/ofl/notosanstc/OFL.txt'}
+          records=[]
+          for name,url in resources.items():
+           req=urllib.request.Request(url,headers={'User-Agent':'PersonalBookletTypography/1.0'})
+           with urllib.request.urlopen(req,timeout=60) as r: data=r.read()
+           (work/name).write_bytes(data)
+           records.append({'name':name,'official_source':url,'sha256':hashlib.sha256(data).hexdigest(),'size':len(data)})
+          for weight in [400,700]:
+           font=TTFont(work/'NotoSansTC-VF.ttf')
+           instantiateVariableFont(font,{'wght':weight},inplace=True).save(work/f'NotoSansTC-{weight}.ttf')
+          html='''<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><style>
+          @font-face{font-family:Mantou;src:url("MantouSans-Regular.ttf");font-weight:400}
+          @font-face{font-family:Iansui;src:url("Iansui-Regular.ttf");font-weight:400}
+          @font-face{font-family:Info;src:url("NotoSansTC-400.ttf");font-weight:400}
+          @font-face{font-family:Info;src:url("NotoSansTC-700.ttf");font-weight:700}
+          @page{size:148mm 210mm;margin:0}*{box-sizing:border-box}body{margin:0;color:#24392f;font-family:Info;font-size:9pt}.sheet{width:148mm;height:210mm;background:#f7f3ec;padding:11mm 12mm;position:relative}.eyebrow{font-size:7pt;letter-spacing:1pt;color:#61705c;border-bottom:.3mm solid #cfcec0;padding-bottom:3mm}h1{font-family:Mantou;font-size:26pt;font-weight:400;line-height:1.25;margin:7mm 0 4mm;letter-spacing:0}.intro{font-family:Iansui;font-size:11.5pt;line-height:1.55;margin:0 0 6mm}.row{border-top:.3mm solid #d7d5c8;padding:5mm 0 4mm}.role{font:7.5pt Info;color:#667462;margin-bottom:3mm}.title{font-family:Mantou;font-size:26pt;line-height:1.35;letter-spacing:0}.body{font-family:Iansui;font-size:11pt;line-height:1.65}.number{font-family:Info;font-weight:700;font-size:21pt;letter-spacing:.2pt}.small{font:8.5pt Info;line-height:1.55}.green{color:#4c7043}.red{color:#d9471c}.blue{color:#1d4563}.seablue{background:#b6d8e9;color:#1d4563;padding:1mm 2mm;display:inline-block}footer{position:absolute;left:12mm;right:12mm;bottom:9mm;border-top:.3mm solid #b8c0ae;padding-top:3mm;font:6.5pt Info;line-height:1.6}.source{font-size:5.7pt}
+          </style></head><body><section class="sheet"><div class="eyebrow">KANSAI FIELD NOTES / TYPOGRAPHY STUDY</div><h1>把字也換成<br>旅行的樣子。</h1><p class="intro">照片旁邊，要有一點手寫的溫度；<br>找路的時候，時間與地址還是要清楚。</p><div class="row"><div class="role">01　地區大標｜饅頭黑體 Mantou Sans</div><div class="title"><span class="green">宇治</span>　<span class="red">京都</span><br><span class="blue">大阪</span>　<span class="seablue">天橋立</span></div></div><div class="row"><div class="role">02　景點介紹、手帳短句｜芫荽 Iansui</div><div class="body">先喝一杯抹茶，再沿著宇治川散步。<br>把喜歡的小店記下來，留一點空白給旅途。</div></div><div class="row"><div class="role">03　時間、站名、地址｜Noto Sans TC</div><div class="number">08:10　→　08:25</div><div class="small"><b>日本橋站 2 號出口</b>　集合前先找到出口<br>數字與導航文字不用細手寫字，保留辨識度。</div></div><footer>三款字體均使用 SIL Open Font License 1.1。字體原作者來源：<br><span class="source">github.com/mant0u0/MantouSans · github.com/ButTaiwan/iansui<br>github.com/google/fonts/tree/main/ofl/notosanstc</span><br>字體選樣用／A5實際尺寸／不是正式旅遊內頁</footer></section></body></html>'''
+          # Print proof embeds licensed fonts, but standalone font binaries are never attached.
+          doc=HTML(string=html,base_url=str(work.resolve())).render()
+          assert len(doc.pages)==1
+          doc.write_pdf(out/'type-proof-production.pdf',full_fonts=True)
+          (out/'source-records.json').write_text(json.dumps(records,ensure_ascii=False,indent=2))
+          print('Rendered one-page A5 type proof with embedded OFL fonts. No standalone font files are exported.')
+          PY
+      - name: Return only rendered design proof and sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: booklet-typography-proof
+          path: proof/
+          retention-days: 1
