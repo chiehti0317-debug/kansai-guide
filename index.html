@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-Hant"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+<meta name="robots" content="noindex,nofollow,noarchive"><meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#f5f1e8"><meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>私人旅記｜解鎖</title>
+<link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./icon-512.png">
+<style>
+:root{--paper:#f5f1e8;--card:#fffcf5;--ink:#294639;--muted:#647360;--line:#d9d8c8;--green:#284f3e;--serif:"Songti TC","Noto Serif TC",Georgia,serif}
+*{box-sizing:border-box}html,body{margin:0;background:var(--paper);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei",sans-serif;height:100%}button,input{font:inherit}button{cursor:pointer}button:disabled{cursor:wait;opacity:.65}[hidden]{display:none!important}
+a{color:inherit}.gate{min-height:100svh;display:grid;place-items:center;padding:calc(28px + env(safe-area-inset-top)) 24px calc(28px + env(safe-area-inset-bottom))}
+.cover{max-width:430px;width:100%}.brand{display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:36px}.brand strong{font:24px Georgia,serif;letter-spacing:.19em}.brand span{font-size:10px;letter-spacing:.2em}
+.eyebrow{font-size:11px;letter-spacing:.17em;color:var(--muted);margin:0 0 15px}.cover h1{font:500 40px/1.5 var(--serif);letter-spacing:.08em;margin:0 0 15px}.intro{font-size:14px;line-height:1.9;color:var(--muted);margin:0 0 27px}
+.lockmark{width:76px;height:76px;background:#e7e9dc;display:grid;place-items:center;margin-bottom:24px;border-radius:50%}.lockmark svg{width:32px;height:32px}.rule{height:1px;background:var(--line);margin:30px 0 21px}label{font-size:13px;font-weight:600;display:block;margin-bottom:9px}
+input{width:100%;padding:14px 12px;background:var(--card);border:1px solid #b2bca9;border-radius:6px;color:var(--ink);font-size:16px;min-height:50px;min-width:0}.code-row{display:flex;gap:8px}.code-row input{flex:1}.show{flex-shrink:0;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:6px;min-height:50px;padding:0 13px}
+.unlock{width:100%;min-height:52px;background:var(--green);color:#fffaf0;border:0;border-radius:6px;font-weight:600;margin-top:14px;letter-spacing:.05em}.tiny{font-size:12px;line-height:1.8;color:var(--muted)}.error{color:#8c302e;min-height:22px;font-size:13px;line-height:1.7;margin:10px 0}
+.tools{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 12px;background:var(--green);color:#fffaf0;min-height:49px;padding-top:calc(7px + env(safe-area-inset-top));border-bottom:1px solid #446350}.tools strong{font:15px var(--serif);white-space:nowrap;letter-spacing:.07em}.tools .actions{display:flex;gap:6px}.tools button{border:1px solid #849b89;background:transparent;color:#fffaf0;padding:9px 10px;font-size:12px;min-height:36px;border-radius:5px}.reader{height:100svh;height:100dvh;display:flex;flex-direction:column}.reader iframe{border:0;display:block;flex:1;min-height:0;width:100%;background:var(--paper)}
+.toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);max-width:calc(100vw - 36px);width:420px;background:#284f3e;color:#fffaf0;box-shadow:0 4px 20px #19332633;font-size:13px;line-height:1.7;padding:14px 16px;border-radius:10px;z-index:100}.support{font-size:12px;color:var(--muted);line-height:1.9}.support b{font-weight:600}.checkline{font-size:12px;line-height:1.7;color:var(--muted)}:focus-visible{outline:3px solid #a28142;outline-offset:3px}
+@media(min-width:760px){.reader{max-width:1060px;margin:auto;border-left:1px solid var(--line);border-right:1px solid var(--line)}.gate{padding-top:35px;padding-bottom:35px}.cover h1{font-size:44px}}
+</style></head><body>
+<main id="gate" class="gate"><section class="cover" aria-labelledby="heading">
+<div class="brand"><strong>JOURNAL</strong><span>PRIVATE EDITION</span></div>
+<div class="lockmark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg></div>
+<p class="eyebrow">YOUR JOURNEY, KEPT PRIVATE</p><h1 id="heading">把旅行，<br>留給自己。</h1>
+<p class="intro">輸入解鎖碼，打開你的行程、導航與旅途筆記。<br>完整內容已加密，不用另外註冊旅記帳號。</p>
+<form id="unlockForm"><label for="passphrase">旅記解鎖碼</label><div class="code-row"><input id="passphrase" type="password" required autocomplete="current-password" autocapitalize="none" spellcheck="false" aria-describedby="error" placeholder="貼上另外保存的解鎖碼"><button class="show" type="button" id="showPass" aria-label="顯示解鎖碼" aria-pressed="false">顯示</button></div><button id="unlock" class="unlock" type="submit">解鎖我的旅記　→</button><p id="error" class="error" role="alert"></p></form>
+<p class="tiny">只把解鎖碼交給信任的同行者。這個頁面不會上傳解鎖碼，也不會把它自動保存在網站儲存空間。瀏覽器可能詢問是否存入你的密碼管理器。</p>
+<div class="rule"></div><div class="support"><b>第一次使用</b><br>解鎖後按上方「離線準備」，再用 Safari 分享選單加入主畫面。出發前，請開飛航模式測試。<br>地圖導航與店家網站仍需網路。</div>
+<noscript><p class="error">此加密版需要瀏覽器執行JavaScript。請以Safari或Chrome開啟正式網站。</p></noscript>
+</section></main>
+<section id="reader" class="reader" hidden aria-label="私人旅行導覽"><header class="tools"><strong>私人旅記</strong><div class="actions"><button id="offline" type="button">離線準備</button><button id="lock" type="button">鎖定</button></div></header><iframe id="guide" title="完整九日旅遊導覽" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-downloads allow-popups allow-popups-to-escape-sandbox" allow="clipboard-write"></iframe></section>
+<div id="toast" class="toast" role="status" hidden></div>
+<script src="./app.js" defer></script></body></html>

@@ -1,0 +1,1 @@
+{"id": "./", "name": "私人旅記", "short_name": "私人旅記", "lang": "zh-TW", "start_url": "./", "scope": "./", "display": "standalone", "background_color": "#f5f1e8", "theme_color": "#f5f1e8", "icons": [{"src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"}]}
