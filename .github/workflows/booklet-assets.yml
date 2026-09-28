@@ -8,45 +8,39 @@ permissions:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 5
     steps:
-      - name: Fetch print-suitable CC photographs
+      - name: Fetch alternative high-resolution licensed photographs
         run: |
           python3 - <<'PY'
           import pathlib, hashlib, urllib.parse, urllib.request, json, time
           out=pathlib.Path('booklet-assets'); out.mkdir()
           items=[
-            ('byodoin','Byōdō-in, Phoenix Hall.jpg','Marco Almbauer','CC0 1.0'),
-            ('nakamura','Nakamura Tokichi Honten, Uji Main Store (50910886201).jpg','Dick Thomas Johnson','CC BY 2.0'),
-            ('fushimi','Fushimi Inari-taisha senbon-torii, August 2019.jpg','Jason Zhang','CC BY-SA 3.0'),
-            ('daruma','Katsuo-ji daruma.jpg','Chris Gladis','CC BY 2.0'),
-            ('namba','Namba Yasaka-Jinja.png','Thomas Housieaux','CC BY 4.0'),
-            ('amano','Amanohashidate view from Mt Moju02s3s4592.jpg','663highland','CC BY 2.5'),
-            ('ine','Funaya in Ine Town, Yosa District, Kyoto Prefecture 006.jpg','Naokijp','CC BY-SA 4.0')
+            ('amano_summer','Amanohashidate 2008-8-13.jpg','osakaosaka','Public domain (PD-self)'),
+            ('daruma_close','Daruma Dolls Osaka.JPG','EllieRH','CC BY-SA 4.0'),
+            ('daruma_banzai','Daruma dolls at Katsuo-ji 20100102.jpg','Banzai Hiroaki','CC BY 2.0')
           ]
           records=[]
           for key,name,author,lic in items:
             filename=name.replace(' ','_'); h=hashlib.md5(filename.encode()).hexdigest()
-            suffix=h[0]+'/'+h[:2]+'/'+urllib.parse.quote(filename)
-            original='https://upload.wikimedia.org/wikipedia/commons/'+suffix
+            original='https://upload.wikimedia.org/wikipedia/commons/'+h[0]+'/'+h[:2]+'/'+urllib.parse.quote(filename)
             source='https://commons.wikimedia.org/wiki/File:'+urllib.parse.quote(filename)
             try:
               req=urllib.request.Request(original,headers={'User-Agent':'KansaiBookletAssetResearch/1.0 (personal print booklet; Wikimedia attribution preserved)'})
               with urllib.request.urlopen(req,timeout=60) as r: data=r.read(30000000)
-              if not (data.startswith(b'\xff\xd8') or data.startswith(b'\x89PNG')): raise ValueError('Not an image')
-              target=key+pathlib.Path(name).suffix.lower(); (out/target).write_bytes(data)
+              if not data.startswith(b'\xff\xd8'): raise ValueError('Not a JPEG')
+              target=key+'.jpg'; (out/target).write_bytes(data)
               records.append({'id':key,'file':target,'title':name,'author':author,'license':lic,'source':source,'original_url':original,'download_url':original,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()})
               print(key,len(data),lic,flush=True)
-            except Exception as e:
-              print(key,'unavailable',str(e),flush=True)
-            (out/'sources.json').write_text(json.dumps(records,ensure_ascii=False,indent=2))
+            except Exception as e: print(key,'unavailable',str(e),flush=True)
+            (out/'alternatives.json').write_text(json.dumps(records,ensure_ascii=False,indent=2))
             time.sleep(8)
           PY
       - name: Return research assets, not website content
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: licensed-booklet-photographs
+          name: licensed-booklet-alternatives
           path: booklet-assets/
           retention-days: 1
           compression-level: 0
