@@ -43,7 +43,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, pathlib, secrets
-          from playwright.sync_api import sync_playwright
+          from playwright.sync_api import sync_playwright, expect
           base='https://chiehti0317-debug.github.io/kansai-guide/'
           test_code=secrets.token_urlsafe(32)
           # No real unlock code or decrypted itinerary is supplied to CI.
@@ -55,8 +55,8 @@ jobs:
               errors=[]
               page.on('pageerror',lambda e:errors.append(str(e)))
               page.goto(base,wait_until='networkidle')
-              assert page.locator('#gate').is_visible()
-              assert not page.locator('#reader').is_visible()
+              expect(page.locator('#gate')).to_be_visible()
+              expect(page.locator('#reader')).to_be_hidden()
               assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
               fixture=page.evaluate('''async (password)=>{
                 const enc=new TextEncoder(), salt=crypto.getRandomValues(new Uint8Array(16)), iv=crypto.getRandomValues(new Uint8Array(12));
@@ -71,17 +71,16 @@ jobs:
               page.route('**/guide.enc.json',lambda route:route.fulfill(json=fixture))
               page.locator('#passphrase').fill('wrong-code-for-test')
               page.locator('#unlock').click()
-              page.wait_for_function('!document.querySelector("#unlock").disabled')
-              assert page.locator('#error').inner_text()
-              assert not page.locator('#reader').is_visible()
+              expect(page.locator('#unlock')).to_be_enabled(timeout=15000)
+              expect(page.locator('#error')).not_to_be_empty()
+              expect(page.locator('#reader')).to_be_hidden()
               page.locator('#passphrase').fill(test_code)
               page.locator('#unlock').click()
               page.frame_locator('#guide').locator('#offline-probe').wait_for()
               assert page.locator('#passphrase').input_value()==''
               page.unroute('**/guide.enc.json')
               page.locator('#offline').click()
-              page.wait_for_function('!document.querySelector("#offline").disabled',timeout=30000)
-              assert '已備妥' in page.locator('#offline').inner_text()
+              expect(page.locator('#offline')).to_have_text('已備妥離線',timeout=30000)
               # Replace only this test browser's cached ciphertext, never server data.
               page.evaluate('''async (fixture)=>{
                 const cache=await caches.open('kansai-gh-20260928-v1');
@@ -93,8 +92,8 @@ jobs:
               page.locator('#unlock').click()
               page.frame_locator('#guide').locator('#offline-probe').wait_for()
               page.locator('#lock').click()
-              assert page.locator('#gate').is_visible()
-              assert not page.locator('#reader').is_visible()
+              expect(page.locator('#gate')).to_be_visible()
+              expect(page.locator('#reader')).to_be_hidden()
               assert not errors,errors
               browser.close()
           print('PASS: mobile layout, incorrect code rejection, Web Crypto decrypt, CSP iframe, lock, service worker preparation, offline reopen and decrypt.')
