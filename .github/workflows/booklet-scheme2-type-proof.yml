@@ -1,0 +1,70 @@
+name: Scheme 2 typography glyph proofs
+on:
+  push:
+    branches: [booklet-assets-20260928]
+    paths: ['.github/workflows/booklet-scheme2-type-proof.yml']
+permissions:
+  contents: read
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Install document proof tools
+        run: python3 -m pip install --quiet weasyprint fonttools brotli pymupdf
+      - name: Render public glyph specimens only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import os,json,pathlib,urllib.request,urllib.parse,hashlib,html
+          from fontTools.ttLib import TTFont
+          from fontTools.varLib.instancer import instantiateVariableFont
+          from weasyprint import HTML
+          from weasyprint.text.fonts import FontConfiguration
+          out=pathlib.Path('scheme2-proof-documents');out.mkdir()
+          private=pathlib.Path('/tmp/scheme2-fonts');private.mkdir()
+          specs=[
+            ('C03','google/fonts','main','ofl/huninn/Huninn-Regular.ttf','ofl/huninn/OFL.txt'),
+            ('C13','mant0u0/MantouSans','HEAD','Font/MantouSans-Regular.ttf','OFL.txt'),
+            ('C18','max32002/naikaifont','master','tw/NaikaiFont-Regular.ttf','SIL_Open_Font_License_1.1.txt'),
+            ('E01','google/fonts','main','ofl/dmserifdisplay/DMSerifDisplay-Regular.ttf','ofl/dmserifdisplay/OFL.txt'),
+            ('J01','google/fonts','main','ofl/notosansjp/NotoSansJP[wght].ttf','ofl/notosansjp/OFL.txt'),
+            ('J07','google/fonts','main','ofl/yuseimagic/YuseiMagic-Regular.ttf','ofl/yuseimagic/OFL.txt')
+          ]
+          # Unordered character coverage probe: no dates, reservations, addresses,
+          # private itinerary sentences or credentials are included in this workflow.
+          chars='–→−、。〒〔〕かずなばもん・一丁三上不中丸乘也交京人今付代以件份伊伏休伴位住使例依保候停傘備僅先入內八公六再凰出分切列到券刻前力加動勝包北区區千午南占印原去參及取口另可台合吉同向含告咖啡善喝回國園圓圖團地址域堀堂報場境壓士外夜夠大天央奏套好始子字它宅宇安完定容實寺封小就尾居屋層山川已巴巽市帳帶平年序底店府座庭廳建式弘彈形影往待徑從御心急性恩息情意愛態慢憑成或手才找把抵抹拍拖拜指掃授排採搭摩散整文料新方旅日早星是時晚景智更有期未本材村松查核根格案梅條極樓標樣横橋權次止正步段殿比氛江池決沒河治沿法波活海準灣為照片牌牛狀獅班現理生用田留略當登發的目直省看眾知短碼示社神票禮私移程稻稿空立站端筆等筋箕節粉粗精約級素細絡給綁綠網線縮纜美翔考者聯自至與舊舟船英茶荷萱著藤號行表裁裝複要見規視觀角訂計記設試說證議買費資走足距跟身車轉近追這通逛進遊運道達適選還邊那部都配重野鐘鐵長門開間闖阪附院隊隔際集雙難電非面頁順預頓領頭題飯飾餐館饅香駅驗體鳥鳳黑點齋（）＋，．／：；｜'
+          probe=''.join(chr(i) for i in range(32,127))+chr(165)+''.join(chr(i) for i in range(0x3041,0x3100))+chars
+          def get(url):
+            headers={'User-Agent':'BookletPrintProof/1.0'}
+            if 'api.github.com' in url: headers['Authorization']='Bearer '+os.environ['GH_TOKEN']
+            with urllib.request.urlopen(urllib.request.Request(url,headers=headers),timeout=90) as r:return r.read()
+          records=[]
+          for ident,repo,ref,path,licpath in specs:
+            if ref=='HEAD':ref=json.loads(get('https://api.github.com/repos/'+repo))['default_branch']
+            prefix='https://raw.githubusercontent.com/'+repo+'/'+ref+'/'
+            url=prefix+urllib.parse.quote(path);data=get(url)
+            target=private/(ident+'.ttf');target.write_bytes(data)
+            font=TTFont(target)
+            version=next((n.toUnicode() for n in font['name'].names if n.nameID==5),'')
+            if 'fvar' in font:font=instantiateVariableFont(font,{'wght':400},inplace=False);font.save(target)
+            cmap=font.getBestCmap() or {}
+            good=''.join(dict.fromkeys(c for c in probe if ord(c) in cmap))
+            license_data=get(prefix+urllib.parse.quote(licpath))
+            assert b'Open Font License' in license_data or b'OPEN FONT LICENSE' in license_data
+            (out/(ident+'-license.txt')).write_bytes(license_data)
+            css='@font-face{font-family:Proof'+ident+';src:url("'+target.as_uri()+'");font-weight:400;}@page{size:A4;margin:15mm}body{font-family:Proof'+ident+';font-size:15pt;font-weight:400;line-height:1.9;overflow-wrap:anywhere;}span{display:inline-block;width:6mm}'
+            specimen=''.join('<span>'+html.escape(c)+'</span>' for c in good)
+            HTML(string='<html><meta charset="utf-8"><style>'+css+'</style><body>'+specimen+'</body></html>').write_pdf(str(out/(ident+'-glyph-proof.pdf')),font_config=FontConfiguration())
+            records.append({'id':ident,'source':url,'license_source':prefix+urllib.parse.quote(licpath),'version':version,'sha256':hashlib.sha256(data).hexdigest(),'rendered_codepoints':[ord(c) for c in good],'missing':' '.join(c for c in chars if ord(c) not in cmap)})
+            print(ident,'specimen created; font files not included')
+          (out/'font-proof-records.json').write_text(json.dumps(records,ensure_ascii=False,indent=2))
+          assert not list(out.rglob('*.ttf')) and not list(out.rglob('*.otf'))
+          PY
+      - name: Return rendered documents and license records only
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheme2-glyph-proof-documents
+          path: scheme2-proof-documents/
+          retention-days: 1
